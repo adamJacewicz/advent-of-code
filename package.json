@@ -1,0 +1,8 @@
+{
+	"name": "aoc2023",
+	"type": "module",
+	"version": "1.0.0",
+	"scripts": {
+		"day": "node index.js"
+	}
+}
