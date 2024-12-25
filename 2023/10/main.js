@@ -7,36 +7,8 @@ const pipes = {
 	"J": "TL",
 	"7": "BL",
 	"F": "BR",
+	"S": "TBRL"
 }
-
-
-const availablePipes = {
-	R: ["-", "7", "J"],
-	L: ["-", "F", "L"],
-	T: ["|", "F", "7"],
-	B: ["|", "J", "L"],
-}
-
-
-function getAvailablePipes(pos, from = pos) {
-	const direction = getDirection(pos, from)
-	const av = getAvailableDirections(pos, direction)
-	const [x, y] = from
-	if(!direction) {
-		const [dx, dy]  = shifts[av[0]]
-		return [x + dx, y + dy]
-	}
-	let fromDir = av[0]
-	const pipe = input[x][y]
-	let z = fromDir === "T" ? "B" : fromDir === "B" ? "T" : fromDir === "L" ? "R" : "L"
-	console.log(av)
-	const toDir = pipes[pipe].replace(z, "")
-	console.log({z,a:av, direction,fromDir,toDir})
-
-	const [dx, dy] = shifts[toDir]
-	return [x + dx, y + dy]
-}
-
 const shifts = {
 	R: [0, 1],
 	L: [0, -1],
@@ -50,65 +22,104 @@ function getStartPosition(matrix) {
 	return [x, y]
 }
 
-function isSamePosition(a, b) {
-	if (!a || !b) return false
-	const [x1, y1] = a
-	const [x2, y2] = b
-	return x1 === x2 && y1 === y2
-}
-
-function isValidPosition([x, y]) {
-	return x >= 0 && y >= 0 && x <= input.length - 1 && y <= input[0].length - 1
-}
-
 function isStartPosition([x, y]) {
 	return input[x][y] === "S"
 }
 
-function getDirection([x1, y1], [x2, y2]) {
-	if (x1 < x2) return "B"
-	if (x1 > x2) return "T"
-	if (y1 < y2) return "R"
-	if (y1 > y2) return "L"
-	return undefined
+
+const reversedDirections = {
+	R: "L",
+	L: "R",
+	T: "B",
+	B: "T"
 }
 
 function getAvailableDirections(pos, fromDir) {
 	const pipe = input[pos[0]][pos[1]]
-	if(pipe === "S") return Object.entries(shifts).reduce((res, [key, [dx,dy]]) => {
-				const newPipe = input[pos[0] +dx][pos[1] + dy]
-		return availablePipes[key].includes(newPipe) && key !== fromDir ? [...res, key] : res
+	const directions = pipes[pipe].replace(reversedDirections[fromDir], "")
+	const [availableDirection] = directions.split("").reduce((res, dir) => {
+		const [dx, dy] = shifts[dir]
+		const newPipe = input[pos[0] + dx]?.[pos[1] + dy]
+		if (!newPipe || newPipe === ".") return res
+		const dirs = pipes[newPipe]
+		return dirs.includes(reversedDirections[dir]) ? [...res, dir] : res
 	}, [])
-	const directions = pipes[pipe]
-	return directions.split("").reduce((res, dir) => {
-		const [dx,dy] = shifts[dir]
-		const newPipe = input[pos[0] + dx][pos[1] + dy]
-		return availablePipes[dir].includes(newPipe) && dir !== fromDir ? [...res, dir] : res
-	}, [])
+	const [dx, dy] = shifts[availableDirection]
+	return {direction: availableDirection, position: [pos[0] + dx, pos[1] + dy]}
 }
 
 const input = loadInput("./2023/10/input.txt").split("\n").map(line => line.split(""))
 
-const start = getStartPosition(input)
-
-const moves = []
-
-function process(pos = start, from) {
-	console.log(pos,from)
-	moves.push(pos)
-	if (moves.length > 1 && isStartPosition(pos)) return moves.length - 1
-	const availablePositions = getAvailablePipes(pos, from)
-	return process(availablePositions, pos)
-}
 
 export function part1() {
-	const steps = process()
+	const start = getStartPosition(input)
+	const moves = []
+	let currPos = start
+	let dir
+	do {
+		moves.push(currPos)
+		const {position, direction} = getAvailableDirections(currPos, dir)
+		currPos = position
+		dir = direction
+	} while (!isStartPosition(currPos))
+	return moves.length / 2
 }
 
 
 console.log("Solution A: ", part1())
+const newInput = JSON.parse(JSON.stringify(input))
+const shiftss = [[0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1], [-1, 0], [1, 0]]
 
-export function part2() {
+function getNeighbours([x, y], neighbours = []) {
+	shiftss.forEach(([dx, dy]) => {
+		if (!!newInput[dx + x]?.[dy + y] && newInput[dx + x]?.[dy + y] !== "@") {
+			if (!neighbours.find(([nx, ny]) => nx === dx + x && ny === dy + y)) {
+				neighbours.push([dx + x, dy + y])
+				neighbours = getNeighbours([dx + x, dy + y], neighbours)
+			}
+		}
+	})
+	return neighbours
 }
 
+export function part2() {
+	let cells = 0
+	const start = getStartPosition(input)
+	const moves = []
+	let currPos = start
+	let dir
+	do {
+		newInput[currPos[0]][currPos[1]] = "@"
+		moves.push(currPos)
+		const {position, direction} = getAvailableDirections(currPos, dir)
+		currPos = position
+		dir = direction
+	} while (!isStartPosition(currPos))
+	for (let i = 1; i < newInput.length - 1; i++) {
+		for (let j = 1; j < newInput[i].length - 1; j++) {
+			const sign = newInput[i][j]
+			if (sign !== "@") {
+				const row = input[i]
+				const col = newInput.map(row => row[j])
+				const colA = col.slice(0, i)
+				const colB = col.slice(i + 1)
+				const rowA = row.slice(0, j)
+				const rowB = row.slice(j + 1)
+				if (![colA, colB, rowA, rowB].every(tab => tab.filter(z => z === "@").length % 2 === 0)) {
+					console.log([colA, colB, rowA, rowB])
+
+					cells += 1
+				} else {
+					const neighbours = getNeighbours([i, j])
+					if (!neighbours.some(([x, y]) => x === 0 || x === input.length - 1 || y === 0 || y === input[0].length - 1)) {
+						cells += 1
+					}
+				}
+
+			}
+		}
+	}
+	console.table(newInput)
+	return cells
+}
 console.log("Solution B: ", part2())
